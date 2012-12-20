@@ -624,11 +624,11 @@ var PDFFindBar = {
 
       case FindStates.FIND_WRAPPED:
         if (previous) {
-          findMsg = mozL10n.get('find_wrapped_to_bottom', null,
-                                'Reached top of page, continued from bottom');
+          findMsg = mozL10n.get('find_reached_top', null,
+                      'Reached top of document, continued from bottom');
         } else {
-          findMsg = mozL10n.get('find_wrapped_to_top', null,
-                                'Reached end of page, continued from top');
+          findMsg = mozL10n.get('find_reached_bottom', null,
+                                'Reached end of document, continued from top');
         }
         break;
     }
@@ -882,6 +882,24 @@ var PDFView = {
     return support;
   },
 
+  get supportsDocumentFonts() {
+    var support = true;
+//#if !(FIREFOX || MOZCENTRAL)
+//#else
+//  support = FirefoxCom.requestSync('supportsDocumentFonts');
+//#endif
+    Object.defineProperty(this, 'supportsDocumentFonts', { value: support,
+                                                           enumerable: true,
+                                                           configurable: true,
+                                                           writable: false });
+    return support;
+  },
+
+  get isHorizontalScrollbarEnabled() {
+    var div = document.getElementById('viewerContainer');
+    return div.scrollWidth > div.clientWidth;
+  },
+
   initPassiveLoading: function pdfViewInitPassiveLoading() {
     if (!PDFView.loadingBar) {
       PDFView.loadingBar = new ProgressBar('#loadingBar', {});
@@ -912,12 +930,19 @@ var PDFView = {
   setTitleUsingUrl: function pdfViewSetTitleUsingUrl(url) {
     this.url = url;
     try {
-      document.title = decodeURIComponent(getFileName(url)) || url;
+      this.setTitle(decodeURIComponent(getFileName(url)) || url);
     } catch (e) {
       // decodeURIComponent may throw URIError,
       // fall back to using the unprocessed url in that case
-      document.title = url;
+      this.setTitle(url);
     }
+  },
+
+  setTitle: function pdfViewSetTitle(title) {
+    document.title = title;
+//#if B2G
+//  document.getElementById('activityTitle').textContent = title;
+//#endif
   },
 
   open: function pdfViewOpen(url, scale, password) {
@@ -1281,6 +1306,11 @@ var PDFView = {
       self.documentInfo = info;
       self.metadata = metadata;
 
+      // Provides some basic debug information
+      console.log('PDF ' + pdfDocument.fingerprint + ' [' +
+                  info.PDFFormatVersion + ' ' + (info.Producer || '-') +
+                  ' / ' + (info.Creator || '-') + ']');
+
       var pdfTitle;
       if (metadata) {
         if (metadata.has('dc:title'))
@@ -1291,7 +1321,7 @@ var PDFView = {
         pdfTitle = info['Title'];
 
       if (pdfTitle)
-        document.title = pdfTitle + ' - ' + document.title;
+        self.setTitle(pdfTitle + ' - ' + document.title);
     });
   },
 
@@ -2023,6 +2053,10 @@ var PageView = function pageView(container, pdfPage, id, scale,
     if (outputScale.scaled) {
       ctx.scale(outputScale.sx, outputScale.sy);
     }
+//#if (FIREFOX || MOZCENTRAL)
+//  // Checking if document fonts are used only once
+//  var checkIfDocumentFontsUsed = !PDFView.pdfDocument.embeddedFontsUsed;
+//#endif
 
     // Rendering area
 
@@ -2035,6 +2069,14 @@ var PageView = function pageView(container, pdfPage, id, scale,
         delete self.loadingIconDiv;
       }
 
+//#if (FIREFOX || MOZCENTRAL)
+//    if (checkIfDocumentFontsUsed && PDFView.pdfDocument.embeddedFontsUsed &&
+//        !PDFView.supportsDocumentFonts) {
+//      console.error(mozL10n.get('web_fonts_disabled', null,
+//        'Web fonts are disabled: unable to use embedded PDF fonts.'));
+//      PDFView.fallback();
+//    }
+//#endif
       if (error) {
         PDFView.error(mozL10n.get('rendering_error', null,
           'An error occurred while rendering the page.'), error);
@@ -2089,12 +2131,18 @@ var PageView = function pageView(container, pdfPage, id, scale,
   this.beforePrint = function pageViewBeforePrint() {
     var pdfPage = this.pdfPage;
     var viewport = pdfPage.getViewport(1);
-
+    // Use the same hack we use for high dpi displays for printing to get better
+    // output until bug 811002 is fixed in FF.
+    var PRINT_OUTPUT_SCALE = 2;
     var canvas = this.canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    canvas.style.width = viewport.width + 'pt';
-    canvas.style.height = viewport.height + 'pt';
+    canvas.width = Math.floor(viewport.width) * PRINT_OUTPUT_SCALE;
+    canvas.height = Math.floor(viewport.height) * PRINT_OUTPUT_SCALE;
+    canvas.style.width = (PRINT_OUTPUT_SCALE * viewport.width) + 'pt';
+    canvas.style.height = (PRINT_OUTPUT_SCALE * viewport.height) + 'pt';
+    var cssScale = 'scale(' + (1 / PRINT_OUTPUT_SCALE) + ', ' +
+                              (1 / PRINT_OUTPUT_SCALE) + ')';
+    CustomStyle.setProp('transform' , canvas, cssScale);
+    CustomStyle.setProp('transformOrigin' , canvas, '0% 0%');
 
     var printContainer = document.getElementById('printContainer');
     printContainer.appendChild(canvas);
@@ -2102,6 +2150,13 @@ var PageView = function pageView(container, pdfPage, id, scale,
     var self = this;
     canvas.mozPrintCallback = function(obj) {
       var ctx = obj.context;
+
+      ctx.save();
+      ctx.fillStyle = 'rgb(255, 255, 255)';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.restore();
+      ctx.scale(PRINT_OUTPUT_SCALE, PRINT_OUTPUT_SCALE);
+
       var renderContext = {
         canvasContext: ctx,
         viewport: viewport
@@ -2718,7 +2773,7 @@ document.addEventListener('DOMContentLoaded', function webViewerLoad(evt) {
   var locale = navigator.language;
   if ('locale' in hashParams)
     locale = hashParams['locale'];
-  mozL10n.language.code = locale;
+  mozL10n.setLanguage(locale);
 //#endif
 
   if ('textLayer' in hashParams) {
@@ -2994,7 +3049,7 @@ function selectScaleOption(value) {
 }
 
 window.addEventListener('localized', function localized(evt) {
-  document.getElementsByTagName('html')[0].dir = mozL10n.language.direction;
+  document.getElementsByTagName('html')[0].dir = mozL10n.getDirection();
 }, true);
 
 window.addEventListener('scalechange', function scalechange(evt) {
@@ -3094,6 +3149,7 @@ window.addEventListener('keydown', function keydown(evt) {
       case 61: // FF/Mac '='
       case 107: // FF '+' and '='
       case 187: // Chrome '+'
+      case 171: // FF with German keyboard
         PDFView.zoomIn();
         handled = true;
         break;
@@ -3104,6 +3160,7 @@ window.addEventListener('keydown', function keydown(evt) {
         handled = true;
         break;
       case 48: // '0'
+      case 96: // '0' on Numpad of Swedish keyboard
         PDFView.parseScale(DEFAULT_SCALE, true);
         handled = true;
         break;
@@ -3151,6 +3208,10 @@ window.addEventListener('keydown', function keydown(evt) {
         }
         //  in fullscreen mode falls throw here
       case 37: // left arrow
+        // horizontal scrolling using arrow keys
+        if (PDFView.isHorizontalScrollbarEnabled) {
+          break;
+        }
       case 75: // 'k'
       case 80: // 'p'
         PDFView.page--;
@@ -3164,6 +3225,10 @@ window.addEventListener('keydown', function keydown(evt) {
         }
         //  in fullscreen mode falls throw here
       case 39: // right arrow
+        // horizontal scrolling using arrow keys
+        if (PDFView.isHorizontalScrollbarEnabled) {
+          break;
+        }
       case 74: // 'j'
       case 78: // 'n'
         PDFView.page++;
@@ -3229,17 +3294,10 @@ window.addEventListener('afterprint', function afterPrint(evt) {
 //#if B2G
 //window.navigator.mozSetMessageHandler('activity', function(activity) {
 //  var url = activity.source.data.url;
-//  // Temporarily get the data here since the cross domain xhr is broken in
-//  // the worker currently, see bug 761227.
-//  var params = {
-//    url: url,
-//    error: function(e) {
-//      PDFView.error(mozL10n.get('loading_error', null,
-//                    'An error occurred while loading the PDF.'), e);
-//    }
-//  };
-//  PDFJS.getPdf(params, function successCallback(data) {
-//    PDFView.open(data, 0);
+//  PDFView.open(url);
+//  var cancelButton = document.getElementById('activityClose');
+//  cancelButton.addEventListener('click', function() {
+//    activity.postResult('close');
 //  });
 //});
 //#endif
