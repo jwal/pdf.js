@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<title>Canvas test: 2d.fillRule.default</title>
+<meta name="author" content="James Ascroft-Leigh">
+<script src="../../common/canvas-tests.js"></script>
+<link rel="stylesheet" href="../../common/canvas-tests.css">
+<body class="show_output">
+
+<h1><a href="index.2d.html">2d</a>.<a href="index.2d.fillRule.html">fillRule</a>.default</h1>
+<p class="desc"></p>
+
+<div class="refs">Spec references:
+<ul>
+<li><a href="../annotated-spec/canvas.html#testrefs.2d.colours.default">2d.colours.default</a></li>
+<li><a href="https://github.com/jwal/webkit/wiki/fillRule-specification">Draft specification</a></li>
+</ul>
+</div>
+
+<p class="output">Actual output:</p>
+<canvas id="c" class="output" width="100" height="50"><p class="fallback">FAIL (fallback content)</p></canvas>
+
+<ul id="d"></ul>
+<script>
+_addTest(function(canvas, ctx) {
+
+_assertEqual(ctx.fillRule, 'nonzero', "ctx.fillRule", "'nonzero'");
+
+
+});
+</script>
+

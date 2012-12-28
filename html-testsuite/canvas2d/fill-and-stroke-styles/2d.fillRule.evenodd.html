@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<title>Canvas test: 2d.fillRule.evenodd</title>
+<meta name="author" content="James Ascroft-Leigh">
+<script src="../../common/canvas-tests.js"></script>
+<link rel="stylesheet" href="../../common/canvas-tests.css">
+<body class="show_output">
+
+<h1><a href="index.2d.html">2d</a>.<a href="index.2d.fillRule.html">fillRule</a>.evenodd</h1>
+<p class="desc"></p>
+
+<div class="refs">Spec references:
+<ul>
+<li><a href="../annotated-spec/canvas.html#testrefs.2d.fillRule.evenodd">2d.fillRule.evenodd</a>
+<li><a href="https://github.com/jwal/webkit/wiki/fillRule-specification">Draft specification</a></li>
+</ul>
+</div>
+<p class="notes">
+<p class="output">Actual output:</p>
+<canvas id="c" class="output" width="426px" height="142px"><p class="fallback">FAIL (fallback content)</p></canvas>
+<p class="output expectedtext">Expected output:<p><img src="2d.fillRule.evenodd.png" class="output expected" id="expected" alt="">
+<ul id="d"></ul>
+<script>
+_addTest(function(canvas, ctx) {
+
+// The test simply compares the rendered canvas image with the 
+// expected PNG image.  Since the canvas->PNG->canvas->PNG conversion
+// process (used for the expected result) can introduce some minor
+// image differences (e.g. aliasing on the edges) we apply that same
+// conversion to the actual rendered canvas before comparison.
+
+ctx.fillRule = "evenodd";
+_render_fillRule_example_shapes(ctx);
+var rendered_canvas = document.getElementById("c");
+var actual_canvas = document.createElement("canvas");
+var actual_img = document.createElement("img");
+actual_img.src = rendered_canvas.toDataURL("image/png");
+actual_canvas.width = rendered_canvas.width;
+actual_canvas.height = rendered_canvas.height;
+actual_canvas.getContext("2d").drawImage(actual_img, 0, 0);
+var expected_canvas = document.createElement("canvas");
+expected_canvas.width = rendered_canvas.width;
+expected_canvas.height = rendered_canvas.height;
+expected_canvas.getContext("2d").drawImage(document.getElementById("expected"), 0, 0);
+var actual_data = actual_canvas.toDataURL("image/png");
+var expected_data = expected_canvas.toDataURL("image/png");
+_assertEqual(actual_data, expected_data, "actual_data", "expected_data");
+
+});
+</script>
+
