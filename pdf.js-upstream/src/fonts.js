@@ -2303,6 +2303,11 @@ var Font = (function FontClosure() {
       type = 'Type1';
     if (subtype == 'CIDFontType0C' && type != 'CIDFontType0')
       type = 'CIDFontType0';
+    // XXX: Temporarily change the type for open type so we trigger a warning.
+    // This should be removed when we add support for open type.
+    if (subtype === 'OpenType') {
+      type = 'OpenType';
+    }
 
     var data;
     switch (type) {
@@ -2327,7 +2332,7 @@ var Font = (function FontClosure() {
         break;
 
       default:
-        warn('Font ' + properties.type + ' is not supported');
+        warn('Font ' + type + ' is not supported');
         break;
     }
 
@@ -3181,7 +3186,7 @@ var Font = (function FontClosure() {
         }
       }
 
-      function readPostScriptTable(post, properties) {
+      function readPostScriptTable(post, properties, maxpNumGlyphs) {
         var start = (font.start ? font.start : 0) + post.offset;
         font.pos = start;
 
@@ -3198,6 +3203,10 @@ var Font = (function FontClosure() {
             break;
           case 0x00020000:
             var numGlyphs = int16(font.getBytes(2));
+            if (numGlyphs != maxpNumGlyphs) {
+              valid = false;
+              break;
+            }
             var glyphNameIndexes = [];
             for (var i = 0; i < numGlyphs; ++i) {
               var index = int16(font.getBytes(2));
@@ -3532,7 +3541,7 @@ var Font = (function FontClosure() {
 
       // The 'post' table has glyphs names.
       if (post) {
-        var valid = readPostScriptTable(post, properties);
+        var valid = readPostScriptTable(post, properties, numGlyphs);
         if (!valid) {
           tables.splice(tables.indexOf(post), 1);
           post = null;
@@ -4755,7 +4764,9 @@ var Type1Parser = function type1Parser() {
         i += length;
         token = '';
       } else if (isSeparator(c)) {
-        length = parseInt(token, 10);
+        // Use '| 0' to prevent setting a double into length such as the double
+        // does not flow into the loop variable.
+        length = parseInt(token, 10) | 0;
         token = '';
       } else {
         token += c;
@@ -5279,7 +5290,7 @@ Type1Font.prototype = {
           BlueFuzz: '\x0c\x0b',
           BlueScale: '\x0c\x09',
           LanguageGroup: '\x0c\x11',
-          ExpansionFactor: '\x0c\x18'
+          ExpansionFactor: '\x0c\x12'
         };
         for (var field in fieldMap) {
           if (!properties.privateData.hasOwnProperty(field))
@@ -5774,7 +5785,6 @@ var CFFParser = (function CFFParserClosure() {
             stackSize++;
           } else if (value == 14) {
             if (stackSize >= 4) {
-              // TODO fix deprecated endchar construct for Windows
               stackSize -= 4;
             }
           } else if (value >= 32 && value <= 246) {  // number
@@ -5936,13 +5946,13 @@ var CFFParser = (function CFFParserClosure() {
       if (pos == 0 || pos == 1) {
         predefined = true;
         format = pos;
-        var gid = 1;
         var baseEncoding = pos ? Encodings.ExpertEncoding :
                                  Encodings.StandardEncoding;
         for (var i = 0, ii = charset.length; i < ii; i++) {
           var index = baseEncoding.indexOf(charset[i]);
-          if (index != -1)
-            encoding[index] = gid++;
+          if (index != -1) {
+            encoding[index] = i;
+          }
         }
       } else {
         var dataStart = pos;
@@ -6688,3 +6698,11 @@ var CFFCompiler = (function CFFCompilerClosure() {
   return CFFCompiler;
 })();
 
+// Workaround for Private Use Area characters in Chrome on Windows
+// http://code.google.com/p/chromium/issues/detail?id=122465
+// https://github.com/mozilla/pdf.js/issues/1689
+(function checkChromeWindows() {
+  if (/Windows.*Chrome/.test(navigator.userAgent)) {
+    SYMBOLIC_FONT_GLYPH_OFFSET = 0xF100;
+  }
+})();

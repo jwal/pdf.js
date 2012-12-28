@@ -193,7 +193,9 @@ var Page = (function PageClosure() {
                                 xref, handler, this.pageIndex,
                                 'p' + this.pageIndex + '_');
 
-      return pe.getOperatorList(contentStream, resources, dependency);
+      var list = pe.getOperatorList(contentStream, resources, dependency);
+      pe.optimizeQueue(list);
+      return list;
     },
     extractTextContent: function Page_extractTextContent() {
       var handler = {
@@ -284,6 +286,12 @@ var Page = (function PageClosure() {
                   break;
                 case 'GoToR':
                   var url = a.get('F');
+                  if (isDict(url)) {
+                    // We assume that the 'url' is a Filspec dictionary
+                    // and fetch the url without checking any further
+                    url = url.get('F') || '';
+                  }
+
                   // TODO: pdf reference says that GoToR
                   // can also have 'NewWindow' attribute
                   if (!isValidUrl(url))
@@ -495,6 +503,17 @@ var PDFDocument = (function PDFDocumentClosure() {
       if (find(stream, '%PDF-', 1024)) {
         // Found the header, trim off any garbage before it.
         stream.moveStart();
+        // Reading file format version
+        var MAX_VERSION_LENGTH = 12;
+        var version = '', ch;
+        while ((ch = stream.getChar()) > ' ') {
+          if (version.length >= MAX_VERSION_LENGTH) {
+            break;
+          }
+          version += ch;
+        }
+        // removing "%PDF-"-prefix
+        this.pdfFormatVersion = version.substring(5);
         return;
       }
       // May not be a PDF file, continue anyway.
@@ -515,11 +534,12 @@ var PDFDocument = (function PDFDocumentClosure() {
       return shadow(this, 'numPages', num);
     },
     getDocumentInfo: function PDFDocument_getDocumentInfo() {
-      var docInfo;
+      var docInfo = {
+        PDFFormatVersion: this.pdfFormatVersion
+      };
       if (this.xref.trailer.has('Info')) {
         var infoDict = this.xref.trailer.get('Info');
 
-        docInfo = {};
         var validEntries = DocumentInfoValidators.entries;
         // Only fill the document info with valid entries from the spec.
         for (var key in validEntries) {
