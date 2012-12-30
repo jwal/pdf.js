@@ -2,6 +2,7 @@
 <title>Canvas test: 2d.fillRule.evenodd</title>
 <meta name="author" content="James Ascroft-Leigh">
 <script src="../../common/canvas-tests.js"></script>
+<script src="../../common/canvas-fillRule-tests.js"></script>
 <link rel="stylesheet" href="../../common/canvas-tests.css">
 <body class="show_output">
 
@@ -22,28 +23,12 @@
 <script>
 _addTest(function(canvas, ctx) {
 
-// The test simply compares the rendered canvas image with the 
-// expected PNG image.  Since the canvas->PNG->canvas->PNG conversion
-// process (used for the expected result) can introduce some minor
-// image differences (e.g. aliasing on the edges) we apply that same
-// conversion to the actual rendered canvas before comparison.
 
+var origstate = ctx.save();
 ctx.fillRule = "evenodd";
 _render_fillRule_example_shapes(ctx);
-var rendered_canvas = document.getElementById("c");
-var actual_canvas = document.createElement("canvas");
-var actual_img = document.createElement("img");
-actual_img.src = rendered_canvas.toDataURL("image/png");
-actual_canvas.width = rendered_canvas.width;
-actual_canvas.height = rendered_canvas.height;
-actual_canvas.getContext("2d").drawImage(actual_img, 0, 0);
-var expected_canvas = document.createElement("canvas");
-expected_canvas.width = rendered_canvas.width;
-expected_canvas.height = rendered_canvas.height;
-expected_canvas.getContext("2d").drawImage(document.getElementById("expected"), 0, 0);
-var actual_data = actual_canvas.toDataURL("image/png");
-var expected_data = expected_canvas.toDataURL("image/png");
-_assertEqual(actual_data, expected_data, "actual_data", "expected_data");
+_assertCanvasImage(document.getElementById("c"), document.getElementById("expected"));
+_assertRadialPoints(ctx, origstate, "evenodd");
 
 });
 </script>
